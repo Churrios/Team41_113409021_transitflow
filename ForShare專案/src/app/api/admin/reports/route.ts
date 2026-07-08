@@ -38,7 +38,7 @@ export async function GET() {
 
     // 為每一筆檢舉計算「檢舉人歷史信用」
     const enrichedReports = await Promise.all(
-      pendingReports.map(async (report) => {
+      pendingReports.map(async (report: any) => {
         const reporterHistory = await prisma.report.groupBy({
           by: ["status"],
           where: { reporterId: report.reporterId },
