@@ -1,0 +1,213 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// -----------------------------------------------------------------------------
+// 用戶系統 (User System)
+// -----------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?   // bcrypt 雜湊後的密碼
+  university    String?   // 就讀大學
+  lastLoginAt   DateTime? // 最後登入領獎時間
+  
+  // 權限: "FREE" | "SHARE_VIP" | "ADMIN" (因 SQLite 不支援 Enum，以 String 實作)
+  role          String    @default("FREE")
+  
+  // 積分餘額
+  points        Int       @default(0)
+  
+  // 邀請機制
+  inviteCode    String    @unique @default(cuid())
+  invitedById   String?
+  invitedBy     User?     @relation("UserInvites", fields: [invitedById], references: [id])
+  invitees      User[]    @relation("UserInvites")
+  hasClaimedInviteReward Boolean @default(false) // 被邀請人是否已領過 10 點
+  inviteRewardReceived   Boolean @default(false) // 邀請人是否已領過 10 點
+
+  // 審核與停權
+  bannedUntil            DateTime? // 若被停權，記錄解鎖時間
+
+  // 關聯
+  posts              Post[]
+  comments           Comment[]
+  transactionRecords TransactionRecord[]
+  withdrawalRequests WithdrawalRequest[]
+  reports            Report[]
+  inboxMessages      InboxMessage[]
+  searchLogs         SearchLog[]
+  pageViewLogs       PageViewLog[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// -----------------------------------------------------------------------------
+// 知識內容系統 (Content System)
+// -----------------------------------------------------------------------------
+
+model Post {
+  id          String     @id @default(cuid())
+  title       String
+  content     String
+  fileUrl     String?    // 雲端檔案路徑 (S3)
+  fileType    String?    // 檔案類型 (例如: application/pdf)
+  category    String     // 系所/標籤分類
+  
+  // 狀態: "ACTIVE" | "HIDDEN" 
+  status      String     @default("ACTIVE")
+  
+  // 有償或無償分享
+  isPaid      Boolean    @default(true)
+
+  authorId    String
+  author      User       @relation(fields: [authorId], references: [id])
+
+  comments           Comment[]
+  transactionRecords TransactionRecord[]
+  reports            Report[]
+  pageViewLogs       PageViewLog[]
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+// ... 其他模型維持不變 ...
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// -----------------------------------------------------------------------------
+// 經濟與商城系統 (Economy & Reward System)
+// -----------------------------------------------------------------------------
+
+model TransactionRecord {
+  id            String    @id @default(cuid())
+  
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  
+  // 交易類型: "EARN_UPLOAD", "EARN_INVITE", "EARN_TIP", "SPEND_TIP", "SPEND_WITHDRAW", "SPEND_VIP"
+  type          String
+  
+  // 正數表示點數增加，負數表示點數減少
+  amount        Int       
+  description   String    // 例如："打賞貼文" 或 "邀請好友獲得獎勵"
+
+  // 若交易與特定貼文有關聯 (例如: 打賞某篇貼文)
+  relatedPostId String?
+  relatedPost   Post?     @relation(fields: [relatedPostId], references: [id])
+
+  createdAt     DateTime  @default(now())
+}
+
+model WithdrawalRequest {
+  id          String    @id @default(cuid())
+  
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  
+  amount      Int       // 申請兌換所扣除的點數總額
+  
+  // 審核狀態: "PENDING" | "APPROVED" | "REJECTED"
+  status      String    @default("PENDING")
+  notes       String?   // 營運人員審核備註
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// -----------------------------------------------------------------------------
+// 總體經濟與全域設定 (Macroeconomy & System Settings)
+// -----------------------------------------------------------------------------
+model SystemSetting {
+  key         String    @id
+  value       String
+  updatedAt   DateTime  @updatedAt
+}
+
+// -----------------------------------------------------------------------------
+// 信箱與通知系統 (Inbox & Notification System)
+// -----------------------------------------------------------------------------
+model InboxMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  content   String
+  barcode   String?  // 兌換商品的假序號/條碼
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// -----------------------------------------------------------------------------
+// 審核與管理系統 (Admin & Moderation System)
+// -----------------------------------------------------------------------------
+
+model Report {
+  id          String    @id @default(cuid())
+  
+  reporterId  String
+  reporter    User      @relation(fields: [reporterId], references: [id])
+  
+  postId      String
+  post        Post      @relation(fields: [postId], references: [id])
+  
+  reason      String    // 檢舉理由
+  
+  // 處理狀態: "PENDING" | "RESOLVED" | "DISMISSED"
+  status      String    @default("PENDING")
+
+  createdAt   DateTime  @default(now())
+}
+
+// -----------------------------------------------------------------------------
+// 數據追蹤與分析系統 (Analytics System)
+// -----------------------------------------------------------------------------
+
+model SearchLog {
+  id        String   @id @default(cuid())
+  keyword   String
+  
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  
+  createdAt DateTime @default(now())
+}
+
+model PageViewLog {
+  id        String   @id @default(cuid())
+  
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id])
+  
+  duration  Int      // 停留時間(秒)
+  
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  
+  createdAt DateTime @default(now())
+}
