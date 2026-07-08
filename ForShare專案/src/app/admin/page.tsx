@@ -190,7 +190,7 @@ export default function AdminPage() {
               }`}
             >
               {tab.label}
-              {"count" in tab && tab.count > 0 && (
+              {"count" in tab && tab.count !== undefined && tab.count > 0 && (
                 <span className="ml-2 px-2 py-0.5 rounded-full bg-error text-white text-[10px] font-bold">
                   {tab.count}
                 </span>
