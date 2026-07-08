@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+
 export default async function LeaderboardPage() {
   // 查詢排行榜前 20 名使用者
   const topUsers = await prisma.user.findMany({
